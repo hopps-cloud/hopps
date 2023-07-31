@@ -2,9 +2,12 @@ package cloud.hopps;
 
 import io.quarkus.runtime.StartupEvent;
 import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.proxy.handler.ProxyHandler;
+import io.vertx.httpproxy.HttpProxy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
@@ -21,15 +24,16 @@ public class Hopps
 
 	void onStart(@Observes StartupEvent ev)
 	{
-		HttpServer backendServer = vertx.createHttpServer();
-		Router backendRouter = Router.router(vertx);
+		HttpServer proxyServer = vertx.createHttpServer();
+		Router proxyRouter = Router.router(vertx);
+		proxyServer.requestHandler(proxyRouter);
+		proxyServer.listen(8081);
 
-		backendRouter.route(HttpMethod.GET, "/foo").handler(rc -> {
-			rc.response()
-				.putHeader("content-type", "text/html")
-				.end("<html><body><h1>I'm the target resource!</h1></body></html>");
-		});
+		HttpClient proxyClient = vertx.createHttpClient();
+		HttpProxy httpProxy = HttpProxy.reverseProxy(proxyClient);
 
-		backendServer.requestHandler(backendRouter).listen(7070);
+		proxyRouter
+			.route(HttpMethod.GET, "/")
+			.handler(ProxyHandler.create(httpProxy, 8088, "localhost"));
 	}
 }
